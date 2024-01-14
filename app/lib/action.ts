@@ -3,63 +3,54 @@
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { z } from 'zod';
+import { ZodError, z } from 'zod';
+import { CreateInvoiceSchema } from './schemas';
 
 // This is temporary until @types/react-dom is updated
-export type State = {
-  errors?: {
-    customerId?: string[];
-    amount?: string[];
-    status?: string[];
-  };
-  message?: string | null;
-};
+export type State =
+  | {
+      status: 'error';
+      errors?: { path: string; message: string }[];
+      message?: string | null;
+    }
+  | undefined;
 
-const FormSchema = z.object({
-  id: z.string(),
-  customerId: z.string({
-    invalid_type_error: 'Please select a customer.',
-  }),
-  amount: z.coerce.number().gt(0, {
-    message: 'Please enter an amount greater than $0.',
-  }),
-  status: z.enum(['pending', 'paid'], {
-    invalid_type_error: 'Please select an invoice status.',
-  }),
-  date: z.string(),
-});
-
-const CreateInvoice = FormSchema.omit({ id: true, date: true });
+const CreateInvoice = CreateInvoiceSchema.omit({ id: true, date: true });
 
 type Inputs = z.infer<typeof CreateInvoice>;
 
-export async function createInvoice(formData: Inputs) {
-  const validatedFields = CreateInvoice.safeParse({
-    customerId: formData.customerId,
-    amount: formData.amount,
-    status: formData.status,
-  });
-
-  // If form validation fails, return errors early. Otherwise, continue.
-  if (!validatedFields.success) {
-    return {
-      errors: validatedFields.error.flatten().fieldErrors,
-      message: 'Missing Fields. Failed to Create Invoice.',
-    };
-  }
-
-  const { customerId, amount, status } = validatedFields.data;
-  const amountInCents = amount * 100;
-  const date = new Date().toISOString().split('T')[0];
-
+export async function createInvoice(formData: Inputs): Promise<State> {
   try {
+    const validatedFields = CreateInvoice.parse({
+      customerId: formData.customerId,
+      amount: formData.amount,
+      status: formData.status,
+    });
+
+    const { customerId, amount, status } = validatedFields;
+
+    const amountInCents = amount * 100;
+    const date = new Date().toISOString().split('T')[0];
+
     await sql`
-      INSERT INTO invoices (customer_id, amount, status, date)
-      VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
-    `;
+        INSERT INTO invoices (customer_id, amount, status, date)
+        VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
+      `;
   } catch (error) {
+    if (error instanceof ZodError) {
+      return {
+        status: 'error',
+        message: 'Invalid form data',
+        errors: error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: `${issue.message}`,
+        })),
+      };
+    }
+
     return {
-      message: 'Database Error: Failed to Create Invoice.',
+      status: 'error',
+      message: 'Something went wrong. Please try again.',
     };
   }
 
@@ -67,7 +58,7 @@ export async function createInvoice(formData: Inputs) {
   redirect('/dashboard/invoices');
 }
 
-const UpdateInvoice = FormSchema.omit({ id: true, date: true });
+const UpdateInvoice = CreateInvoiceSchema.omit({ id: true, date: true });
 
 export async function updateInvoice(id: string, formData: FormData) {
   const { customerId, amount, status } = UpdateInvoice.parse({

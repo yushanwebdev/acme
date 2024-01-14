@@ -31,11 +31,13 @@ const FormSchema = z.object({
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 
-export async function createInvoice(prevState: State, formData: FormData) {
+type Inputs = z.infer<typeof CreateInvoice>;
+
+export async function createInvoice(formData: Inputs) {
   const validatedFields = CreateInvoice.safeParse({
-    customerId: formData.get('customerId'),
-    amount: formData.get('amount'),
-    status: formData.get('status'),
+    customerId: formData.customerId,
+    amount: formData.amount,
+    status: formData.status,
   });
 
   // If form validation fails, return errors early. Otherwise, continue.

@@ -1,22 +1,20 @@
+import { FieldError } from 'react-hook-form';
+
 export default function ErrorList({
   errors,
   id,
 }: {
-  errors?: Array<string> | null;
+  errors?: FieldError | null;
   id?: string;
 }) {
-  return errors?.length ? (
+  return errors?.message ? (
     <ul
       className="flex flex-col gap-1"
       id={id}
       aria-live="polite"
       aria-atomic="true"
     >
-      {errors.map((error, i) => (
-        <li key={i} className="text-[10px] text-red-500">
-          {error}
-        </li>
-      ))}
+      <li className="text-[10px] text-red-500">{errors.message}</li>
     </ul>
   ) : null;
 }

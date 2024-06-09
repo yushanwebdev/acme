@@ -34,6 +34,7 @@ export default function Form({ customers }: { customers: CustomerField[] }) {
   });
 
   const processForm: SubmitHandler<Inputs> = async (data) => {
+    console.log('data', data);
     const result = await createInvoice(data);
 
     if (result?.status === 'error') {
